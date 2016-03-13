@@ -225,31 +225,23 @@ function create_config( )
     "all",
     "leave_ban",
     "admin"
+    "calculator",
+    "hello",
+    "webshot",
     },
-    sudo_users = {110626080,103649648,143723991,111020322,0,tonumber(our_id)},--Sudo users
+    sudo_users = {147191022},--Sudo users
     disabled_channels = {},
     moderation = {data = 'data/moderation.json'},
-    about_text = [[Teleseed v2 - Open Source
-An advance Administration bot based on yagop/telegram-bot 
+    about_text = [[vinton bot v1 powered by teleseed
+Sudo:
+@vinton
 
-https://github.com/SEEDTEAM/TeleSeed
+channel:
+@vintonchannel
 
-Our team!
-Alphonse (@Iwals)
-I M /-\ N (@Imandaneshi)
-Siyanew (@Siyanew)
-Rondoozle (@Potus)
-Seyedan (@Seyedan25)
+For buy group tell sudo😚
 
-Special thanks to:
-Juan Potato
-Siyanew
-Topkecleon
-Vamptacus
-
-Our channels:
-English: @TeleSeedCH
-Persian: @IranSeed
+💪you can if you want😃
 ]],
     help_text_realm = [[
 Realm Commands:
@@ -418,6 +410,8 @@ Will return group logs
 
 !banlist
 Will return group ban list
+
+!webshot [weblog address]
 
 » U can use both "/" and "!" 
 
