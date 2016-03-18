@@ -1,64 +1,163 @@
-— Re-enable a plugin for this chat
-  if matches[1] == '+' and matches[3] == 'chat' then
-    local receiver = get_receiver(msg)
-    local plugin = matches[2]
-    print("enable "..plugin..' on this chat')
-    return reenable_plugin_on_chat(receiver, plugin)
-  end
 
-  — Enable a plugin
-  if matches[1] == '+' and is_sudo(msg) then —after changed to moderator mode, set only sudo
-    local plugin_name = matches[2]
-    print("enable: "..matches[2])
-    return enable_plugin(plugin_name)
-  end
+do
 
-  — Disable a plugin on a chat
-  if matches[1] == '-' and matches[3] == 'chat' then
-    local plugin = matches[2]
-    local receiver = get_receiver(msg)
-    print("disable "..plugin..' on this chat')
-    return disable_plugin_on_chat(receiver, plugin)
-  end
-
-  — Disable a plugin
-  if matches[1] == '-' and is_sudo(msg) then —after changed to moderator mode, set only sudo
-    if matches[2] == 'plugins' then
-      return 'This plugin can\'t be disabled'
+  -- Returns the key (index) in the config.enabled_plugins table
+  local function plugin_enabled(name)
+    for k,v in pairs(_config.enabled_plugins) do
+      if name == v then
+        return k
+      end
     end
-    print("disable: "..matches[2])
-    return disable_plugin(matches[2])
+    -- If not found
+    return false
   end
 
-  — Reload all the plugins!
-  if matches[1] == '?' and is_sudo(msg) then —after changed to moderator mode, set only sudo
-    return reload_plugins(true)
+  -- Returns true if file exists in plugins folder
+  local function plugin_exists(name)
+    for k,v in pairs(plugins_names()) do
+      if name..'.lua' == v then
+        return true
+      end
+    end
+    return false
   end
-end
 
-return {
-  description = "Plugin to manage other plugins. Enable, disable or reload.", 
-  usage = {
+  local function list_plugins(only_enabled)
+    local text = ''
+    local psum = 0
+    for k, v in pairs(plugins_names()) do
+      --  ✅ enabled, ❌ disabled
+      local status = '❌'
+      psum = psum+1
+      pact = 0
+      -- Check if is enabled
+      for k2, v2 in pairs(_config.enabled_plugins) do
+        if v == v2..'.lua' then
+          status = '✅'
+        end
+        pact = pact+1
+      end
+      if not only_enabled or status == '✅' then
+        -- get the name
+        v = string.match (v, "(.*)%.lua")
+        text = text..status..'  '..v..'\n'
+      end
+    end
+    local text = text..'\n'..psum..'  plugins installed.\n✅  '
+                ..pact..' enabled.\n❌  '..psum-pact..' disabled.'
+    return text
+  end
+
+  local function reload_plugins()
+    plugins = {}
+    load_plugins()
+    return list_plugins(true)
+  end
+
+  local function run(msg, matches)
+    if is_mod(msg.from.id, msg.to.id) then
+      -- Show the available plugins
+      if matches[1] == '!plugins' then
+        return list_plugins()
+      -- Re-enable a plugin for this chat
+      elseif matches[1] == 'enable' and matches[3] == 'chat' then
+        print("enable "..matches[2]..' on this chat')
+        if not _config.disabled_plugin_on_chat then
+          return 'There aren\'t any disabled plugins for this chat.'
+        end
+        if not _config.disabled_plugin_on_chat[get_receiver(msg)] then
+          return 'There aren\'t any disabled plugins for this chat'
+        end
+        if not _config.disabled_plugin_on_chat[get_receiver(msg)][matches[2]] then
+          return 'Plugin '..matches[2]..' is not disabled for this chat.'
+        end
+        _config.disabled_plugin_on_chat[get_receiver(msg)][matches[2]] = false
+        save_config()
+        return 'Plugin '..matches[2]..' is enabled again for this chat.'
+      -- Disable a plugin on a chat
+      elseif matches[1] == 'disable' and matches[3] == 'chat' then
+        print('disable '..matches[2]..' on this chat')
+        if not plugin_exists(matches[2]) then
+          return 'Plugin '..matches[2]..' doesn\'t exists'
+        end
+        if not _config.disabled_plugin_on_chat then
+          _config.disabled_plugin_on_chat = {}
+        end
+        if not _config.disabled_plugin_on_chat[get_receiver(msg)] then
+          _config.disabled_plugin_on_chat[get_receiver(msg)] = {}
+        end
+        _config.disabled_plugin_on_chat[get_receiver(msg)][matches[2]] = true
+        save_config()
+        return 'Plugin '..matches[2]..' disabled for this chat'
+      end
+    end
+    if is_sudo(msg.from.id) then
+      -- Enable a plugin
+      if matches[1] == 'enable' then
+        print('enable: '..matches[2])
+        print('checking if '..matches[2]..' exists')
+        -- Check if plugin is enabled
+        if plugin_enabled(matches[2]) then
+          return 'Plugin '..matches[2]..' is enabled'
+        end
+        -- Checks if plugin exists
+        if plugin_exists(matches[2]) then
+          -- Add to the config table
+          table.insert(_config.enabled_plugins, matches[2])
+          print(matches[2]..' added to _config table')
+          save_config()
+          -- Reload the plugins
+          return reload_plugins( )
+        else
+          return 'Plugin '..matches[2]..' does not exists'
+        end
+      -- Disable a plugin
+      elseif matches[1] == 'disable' then
+        print('disable: '..matches[2])
+        -- Check if plugins exists
+        if not plugin_exists(matches[2]) then
+          return 'Plugin '..matches[2]..' does not exists'
+        end
+        local k = plugin_enabled(matches[2])
+        -- Check if plugin is enabled
+        if not k then
+          return 'Plugin '..matches[2]..' not enabled'
+        end
+        -- Disable and reload
+        table.remove(_config.enabled_plugins, k)
+        save_config( )
+        return reload_plugins(true)
+      -- Reload all the plugins!
+      elseif matches[1] == 'reload' then
+        return reload_plugins(true)
+      end
+    end
+  end
+
+  return {
+    description = 'Plugin to manage other plugins. Enable, disable or reload.',
+    usage = {
       moderator = {
-          "[!/]plugins - [plugin] chat : disable plugin only this chat.",
-          "[!/]plugins + [plugin] chat : enable plugin only this chat.",
-          },
+        '!plugins: list all plugins.',
+        '!plugins enable [plugin] chat: re-enable plugin only this chat.',
+        '!plugins disable [plugin] chat: disable plugin only this chat.'
+      },
       sudo = {
-          "[!/]plugins : list all plugins.",
-          "[!/]plugins + [plugin] : enable plugin.",
-          "[!/]plugins - [plugin] : disable plugin.",
-          "[!/]plugins ? : reloads all plugins." },
-          },
-  patterns = {
-    "^[!/]plugins$",
-    "^[!/]plugins? (+) ([%w_%.%-]+)$",
-    "^[!/]plugins? (-) ([%w_%.%-]+)$",
-    "^[!/]plugins? (+) ([%w_%.%-]+) (chat)",
-    "^[!/]plugins? (-) ([%w_%.%-]+) (chat)",
-    "^[!/]plugins? (?)$" },
-  run = run,
-  moderated = true, — set to moderator mode
-  —privileged = true
-}
+        '!plugins enable [plugin]: enable plugin.',
+        '!plugins disable [plugin]: disable plugin.',
+        '!plugins reload: reloads all plugins.'
+      },
+    },
+    patterns = {
+      "^!plugins$",
+      "^!plugins? (enable) ([%w_%.%-]+)$",
+      "^!plugins? (disable) ([%w_%.%-]+)$",
+      "^!plugins? (enable) ([%w_%.%-]+) (chat)$",
+      "^!plugins? (disable) ([%w_%.%-]+) (chat)$",
+      "^!plugins? (reload)$"
+    },
+    run = run,
+    moderated = true
+  }
 
 end
